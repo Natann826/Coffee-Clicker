@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <style>
+            table{
+                margin-left: auto;
+                margin-right: auto;
+                width: 50%;
+            }
+
+            #coffeeDisplay{
+                font-size: 35px;
+                text-align: right;
+            }
+
+            #helpersDisplay{
+                font-size: 25px;
+                text-align: center;
+            }
+
+            #coffee{
+                width: inherit;
+                height: inherit;
+            }
+
+            .addHelper{
+                text-align: center;
+                border: 1px solid black;
+                width: 90%;
+                margin-right: auto;
+                margin-left: auto;
+                min-height: 100px;
+                vertical-align: middle;
+            }
+
+        </style>
+        {{ JSGlue.include() }}
+    </head>
+    <body>
+        <table>
+            <tbody>
+                <tr>
+                    <td>
+                        <img src="{{url_for('static', filename='images/cofe.png')}}" onclick="addCoffee(1)" id="coffee">
+                    </td>
+                    <td>
+                        <p id="coffeeDisplay">0 coffees</p>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <p id="helpersDisplay">No Helpers! Buy some!</p>
+
+        <script>
+
+        function updateCoffeeDisplay(){
+            dsply = document.getElementById('coffeeDisplay')
+
+            if(coffees == 1 || coffees == 0){
+                dsply.innerHTML = coffees + ' coffee!'
+            }
+            else{
+               dsply.innerHTML = coffees + ' coffees!' 
+            }
+        }
+
+        function resetHelpersCount(){
+            helpersCount = []
+            for(helper of Object.entries(helperStats)){
+                helpersCount.push(0)
+            }
+        }
+
+        // Main coffee variable
+        var coffees = 0;
+        var ticks = 0;
+
+        var timer = 0;
+
+        //adds coffees. Also updates display.
+        function addCoffee(amount){
+            coffees += amount;
+            updateCoffeeDisplay()
+        }
+
+        function updatePost(){
+            
+            var params = coffees + "|" + ticks;
+            
+            var url = "/";
+            
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", url, true);
+
+            //Send the proper header information along with the request
+            xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+
+            xhr.send(params);
+            ticks++
+
+            timerDisplay = document.getElementById('timer')
+            var minutes = Math.trunc(timer / 60)
+            var seconds = timer % 60
+
+            graph = document.getElementById('graph')
+            graph.src = Flask.url_for("static", {"filename": "images/coffees.png"})
+
+            final = minutes + ':' + seconds
+            timerDisplay.innerHTML = final
+            timer++
+        }
+
+        // price, revenue, freq (sec)
+        var helperStats = {
+            "Brewer": [5, 1, 1],
+            "Coffee Machine": [50, 5, 1],
+            "Coffee Plantation": [250, 5, 0.25],
+            "Coffee Factory": [5000, 750, 5],
+            "Coffee Country": [100000, 50000, 10]
+        }
+
+        // Used for tracking all helpers
+        var helpers = []
+
+        resetHelpersCount()
+
+        // helper class
+        class Helper{
+            constructor(price, revenue, freq, name, id){
+
+                this.price = price;
+                this.revenue = revenue;
+                this.freq = freq * 1000;
+                this.name = name;
+                this.id = id;
+
+                this.intrvl = setInterval(function(){addCoffee(revenue)}, this.freq)
+
+                helpers.push(this);
+            }
+
+            toString(){
+                return this.name
+            }
+        }
+            
+        // this block puts the helpers on screen and adds all the logic
+        let element;
+        let i = 0;
+        for([key, val] of Object.entries(helperStats)){ // goes through list and adds information
+            element = document.createElement('div');
+            element.className = 'addHelper';
+            element.id = i;
+            element.innerText = key + '\nPrice: ' + val[0] + ' Coffee(s) | Revenue: ' + val[1] + ' Coffee(s) | Frequency: ' + val[2] + ' second(s)'; // dear god this is abominable i miss u fstrings my beloved
+            
+            element.onclick = function(){ // Essentially this checks what helper this is and then takes the values from the list and makes a helper out of it
+                
+                let index = 0;
+                for([key, val] of Object.entries(helperStats)){
+                    if(index == this.id && coffees >= val[0]){
+                        coffees -= val[0];
+                        updateCoffeeDisplay()
+                        new Helper(val[0], val[1], val[2], key, this.id);
+                        updateHelpers()
+                    }
+                    index++;
+                }
+
+            } // Look, I know this is clunky but it gets the job done. Look to optimize in the future. NOTE: not doing it this way means that val[0] referenced outside the loop (think carefully on what that means) will use the LAST element in the dict
+            i++;
+            document.body.appendChild(element);
+        }
+
+        // the way this works is every time i make a helper i give it the id from the html Helper class. that basically is an index to the helpersCount list, so I just add 1 to the element with that index.
+        function updateHelpers(){
+            resetHelpersCount()
+
+            for(helper of helpers){
+                helpersCount[helper.id]++;
+            }
+            // console.log(helpersCount)
+            display = ""
+
+            var index = 0;
+            for(key of Object.keys(helperStats)){
+                display += (" " + key + '(s): ' + helpersCount[index] + "<br />")
+                index++;
+            }
+
+            var sum = 0;
+            for(helper of helpers){
+                freqPerSecond = 1 / (helper.freq / 1000)
+                sum += (helper.revenue * freqPerSecond) // the math here works like this = doing 1 divided by whatever the frequency is (say 4, so it adds coffees every 4 seconds) gives 0.25. times the revenue by that, and thats how many coffees you're generating a second. it works the other way around with a fraction. if the frequency is 1, then it just does 1/1 which just overall does nothing.
+            }
+
+            display += ("<br /> Currently Generating " + sum + " CpS (Coffees per Second)!")
+
+            var dsply = document.getElementById('helpersDisplay')
+            dsply.innerHTML = display
+
+        }
+
+        setInterval(updatePost, 1000)
+
+
+        </script>
+
+    </body>
+</html>
